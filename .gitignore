@@ -1,43 +1,4 @@
-# Virtual environments
 venv/
-.venv/
-env/
-ENV/
-
-# Python bytecode
 __pycache__/
-*.py[cod]
-*$py.class
-
-# Distribution and packaging
-build/
-dist/
-*.egg-info/
-.eggs/
-*.egg
-
-# Environment variables and secrets
 .env
-
-# Logs and runtime files
-*.log
-*.pid
-
-# Editor and IDE settings
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# macOS and Windows system files
-.DS_Store
-Thumbs.db
-
-# Coverage reports and testing
-.coverage
-coverage.xml
-htmlcov/
-.cache/
-
-# Jupyter Notebook checkpoints (if used)
-.ipynb_checkpoints/
+*.pyc
