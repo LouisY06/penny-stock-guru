@@ -5,175 +5,135 @@ import re
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import yfinance as yf
 import time
-import pandas as pd
 
 load_dotenv()
 analyzer = SentimentIntensityAnalyzer()
-#rockets mean the commenter believes that it's going to rise soon
-analyzer.lexicon["🚀"] = 3.0
-analyzer.lexicon["moon"] = 2.5
-analyzer.lexicon["💎"] = 2.0
-analyzer.lexicon["💰"] = 2.5
-analyzer.lexicon["🔥"] = 2.0
-analyzer.lexicon["bag"] = -2.0  # as in "bagholder"
-analyzer.lexicon["insane"] = 2.0
-analyzer.lexicon["momentum"] = 1.5
-analyzer.lexicon["mooning"] = 3.0
-analyzer.lexicon["squeeze"] = 2.0
-analyzer.lexicon["running"] = 1.5
-analyzer.lexicon["exploding"] = 2.5
 
-# Extract tickers from a given string of text
+# Extend VADER sentiment with stock-related keywords/emojis
+analyzer.lexicon.update({
+    "🚀": 3.0,
+    "moon": 2.5,
+    "💎": 2.0,
+    "💰": 2.5,
+    "🔥": 2.0,
+    "bag": -2.0,       # as in "bagholder"
+    "insane": 2.0,
+    "momentum": 1.5,
+    "mooning": 3.0,
+    "squeeze": 2.0,
+    "running": 1.5,
+    "exploding": 2.5
+})
+
+# Function to extract tickers from a given text
 def extract_tickers(text):
     pattern = r'\$[A-Z]{2,5}\b'
     matches = re.findall(pattern, text)
 
-    cleaned_tickers = []
+    extracted = []
 
     for match in matches:
         if match.startswith('$'):
             match = match[1:]
+        extracted.append(match)
 
-        cleaned_tickers.append(match)
+    return extracted
 
-    return cleaned_tickers
-
-# Load the list of valid tickers from the Nasdaq file
+# Function to load valid ticker symbols from a Nasdaq file
 def load_ticker_list(file_path):
     ticker_set = set()
 
     with open(file_path, "r") as file:
-        next(file)  # Skip header line
+        next(file)  # skip header
 
         for line in file:
             parts = line.strip().split("|")
 
             if len(parts) > 0:
-                symbol = parts[0].upper()
+                symbol = parts[0].strip().upper()
 
-                if symbol != "":
+                if symbol:
                     ticker_set.add(symbol)
 
     return ticker_set
 
-# Load the valid tickers only once
+# Load valid tickers once at the start
 valid_tickers = load_ticker_list("./files/nasdaqlisted.txt")
 
-# Set up PRAW (Reddit API)
-reddit = praw.Reddit(
-    client_id=os.getenv("REDDIT_CLIENT_ID"),
-    client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-    user_agent=os.getenv("REDDIT_USER_AGENT")
-)
+# Main function that scrapes Reddit and returns hyped tickers
+def get_top_hyped_tickers(limit=10):
+    reddit = praw.Reddit(
+        client_id=os.getenv("REDDIT_CLIENT_ID"),
+        client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+        user_agent=os.getenv("REDDIT_USER_AGENT")
+    )
 
-# Select subreddit and prepare ticker count dictionary
-subreddit = reddit.subreddit("pennystocks")
+    subreddit = reddit.subreddit("pennystocks")
+    ticker_scores = {}
 
-ticker_scores = {}
-ticker_counts = {}
+    for post in subreddit.hot(limit=10):
+        time.sleep(1)
 
-for post in subreddit.hot(limit=10):
-    time.sleep(2)
-    title = post.title
-    tickers_in_title = extract_tickers(title)
+        title_tickers = extract_tickers(post.title)
 
-    for ticker in tickers_in_title:
-        if ticker in valid_tickers:
-            if ticker not in ticker_scores:
-                ticker_scores[ticker] = {"mentions": 1, "hype": 0.0}
-            else:
-                ticker_scores[ticker]["mentions"] += 1
+        for ticker in title_tickers:
+            if ticker in valid_tickers:
+                if ticker not in ticker_scores:
+                    ticker_scores[ticker] = {"mentions": 1, "hype": 0.0}
+                else:
+                    ticker_scores[ticker]["mentions"] += 1
 
-    # Load all comments
-    post.comments.replace_more(limit=0)
-    all_comments = post.comments.list()
+        post.comments.replace_more(limit=0)
+        all_comments = post.comments.list()
 
-    for comment in all_comments:
-        text = comment.body
-        tickers_in_comment = extract_tickers(text)
+        for comment in all_comments:
+            text = comment.body
+            tickers = extract_tickers(text)
 
-        if len(tickers_in_comment) > 0:
-            sentiment = analyzer.polarity_scores(text)
-            compound_score = sentiment["compound"]
+            if not tickers:
+                continue
 
-            for ticker in tickers_in_comment:
+            score = analyzer.polarity_scores(text)["compound"]
+
+            for ticker in tickers:
                 if ticker in valid_tickers:
                     if ticker not in ticker_scores:
-                        ticker_scores[ticker] = {"mentions": 1, "hype": compound_score}
+                        ticker_scores[ticker] = {"mentions": 1, "hype": score}
                     else:
                         ticker_scores[ticker]["mentions"] += 1
-                        ticker_scores[ticker]["hype"] += compound_score
-            #just for debugging, making sure vader was working properly
+                        ticker_scores[ticker]["hype"] += score
 
-            #print("Comment:")
-            #print(text)
-            #print("Hype Score:", round(compound_score, 3))
-            #print("Tickers Found:", tickers_in_comment)
-            #print("-" * 60)
+    sorted_tickers = sorted(ticker_scores.items(), key=lambda item: item[1]["mentions"],reverse=True)
 
-    for ticker in tickers_in_comment:
-        if ticker in valid_tickers:
-            if ticker not in ticker_scores:
-                ticker_scores[ticker] = {"mentions": 1, "hype": compound_score}
-            else:
-                ticker_scores[ticker]["mentions"] += 1
-                ticker_scores[ticker]["hype"] += compound_score
+    result = []
 
-        if len(tickers_in_comment) > 0:
-            sentiment = analyzer.polarity_scores(text)
-            compound_score = sentiment["compound"]
+    for ticker, data in sorted_tickers[:limit]:
+        stock = yf.Ticker(ticker)
+        current_price = stock.info["currentPrice"]
 
-            for ticker in tickers_in_comment:
-                if ticker in valid_tickers:
-                    if ticker not in ticker_scores:
-                        ticker_scores[ticker] = {"mentions": 1, "hype": compound_score}
-                    else:
-                        ticker_scores[ticker]["mentions"] += 1
-                        ticker_scores[ticker]["hype"] += compound_score
+        history = stock.history(period="1mo")
 
-# Display the ticker counts, sorted by frequency
-print("Ticker Sentiment Summary:")
-print("-" * 40)
-sorted_ticker = sorted(ticker_scores.items(), key=lambda x: x[1]["mentions"], reverse=True)
-rows = []
-i = 0
-for ticker, data in sorted_ticker:
-    if i == 10:
-        break
+        week_ago_price = history['Close'].iloc[-6]
+        month_ago_price = history['Close'].iloc[0]
 
-    mentions = data["mentions"]
-    hype = round(data["hype"], 3)
+        change_1w = ((current_price - week_ago_price) / week_ago_price) * 100
+        change_1mo = ((current_price - month_ago_price) / month_ago_price) * 100
 
-    try:
-        tkr = yf.Ticker(ticker)
-        current_price = tkr.info.get("currentPrice", None)
-
-        hist = tkr.history(period="1mo")
-        if len(hist) >= 6:
-            week_ago_price = hist['Close'].iloc[-6]  # 5 trading days ago
-            month_ago_price = hist['Close'].iloc[0]
-
-            week_change = ((current_price - week_ago_price) / week_ago_price) * 100
-            month_change = ((current_price - month_ago_price) / month_ago_price) * 100
-
-            # determine trend
-            if month_change > 5:
-                trend = "Up"
-            elif month_change < -5:
-                trend = "Down"
-            else:
-                trend = "Flat"
-
-            print(f"{ticker}: {mentions} mentions | Hype Score: {hype} | Current: {current_price}")
-            print(f"  - 1W change: {week_change:.2f}% | 1M change: {month_change:.2f}% | Trend: {trend}")
-            print("-" * 60)
-
+        if change_1mo > 5:
+            trend = "Up"
+        elif change_1mo < -5:
+            trend = "Down"
         else:
-            print(f"{ticker}: {mentions} mentions | Hype Score: {hype} | Not enough historical data.")
-            print("-" * 60)
+            trend = "Flat"
 
-    except Exception as e:
-        print(f"{ticker}: Error fetching data — {e}")
-        print("-" * 60)
+        result.append({
+            "ticker": ticker,
+            "mentions": data["mentions"],
+            "hype_score": round(data["hype"], 3),
+            "current_price": current_price,
+            "change_1w": round(change_1w, 2),
+            "change_1mo": round(change_1mo, 2),
+            "trend": trend
+        })
 
-    i += 1
+    return result
