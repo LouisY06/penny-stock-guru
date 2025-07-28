@@ -137,3 +137,15 @@ def get_top_hyped_tickers(limit=10):
         })
 
     return result
+
+if __name__ == "__main__":
+    results = get_top_hyped_tickers(limit=10)
+    for stock in results:
+        print(f"\nTicker: {stock['ticker']}")
+        print(f"Mentions: {stock['mentions']}")
+        print(f"Hype Score: {stock['hype_score']}")
+        print(f"Price: ${stock['current_price']:.2f}")
+        print(f"1 Week Change: {stock['change_1w']}%")
+        print(f"1 Month Change: {stock['change_1mo']}%")
+        print(f"Trend: {stock['trend']}")
+        print("-" * 40)
