@@ -7,7 +7,6 @@ With the increase in popularity of penny stocks recently, I've recognized that R
 - Calculates hype scores based on mention frequency
 - Retrieves real-time stock data using Yahoo Finance
 - Tracks price changes and trends
-- CLI interface for quick stock analysis
 
 ## Disclaimer
 
