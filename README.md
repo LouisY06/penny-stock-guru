@@ -9,6 +9,10 @@ With the increase in popularity of penny stocks recently, I've recognized that R
 - Tracks price changes and trends
 - CLI interface for quick stock analysis
 
+## Disclaimer
+
+This tool is for educational purposes only. Always do your own research before making investment decisions. Trading penny stocks involves substantial risk of loss. 
+
 ## Installation
 ```bash
 # Clone repository
@@ -22,5 +26,3 @@ pip install -r requirements.txt
 cp .env.example .env
 # Add your Reddit API credentials to .env
 
-Disclaimer
-This tool is for educational purposes only. Always do your own research before making investment decisions. Trading penny stocks involves substantial risk of loss. 
